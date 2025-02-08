@@ -35,9 +35,9 @@ LoggingSystem.bootstrap { label in
   SupabaseLogHandler(
     label: label,
     config: SupabaseLogConfig(
-      table: "logs", // optional table name to use, defaults to "logs".
       supabaseURL: "https://your-supabase-project-url.com/rest/v1",
       supabaseAnonKey: "your-supabase-anon-key",
+      table: "logs", // optional table name to use, defaults to "logs".
       isDebug: true // optional flag to turn on/off internal logging, defaults to "false".
     )
   )
