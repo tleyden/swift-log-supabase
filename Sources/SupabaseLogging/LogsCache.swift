@@ -26,21 +26,40 @@ final class LogsCache<T: Codable> {
     }
     return poppedLogs
   }
+    
+    func backupCache() {
+        queue.sync(flags: .barrier) {
+            do {
+                let jsonCompatibleLogs = cachedLogs.map { log -> [String: Any] in
+                    if let logEntry = log as? LogEntry {
+                        return [
+                            "label": logEntry.label,
+                            "file": logEntry.file,
+                            "line": logEntry.line,  
+                            "source": logEntry.source,
+                            "function": logEntry.function,
+                            "level": logEntry.level,
+                            "message": logEntry.message,
+                            "loggedAt": ISO8601DateFormatter().string(from: logEntry.loggedAt), // Convert Date to String
+                            "metadata": logEntry.metadata // Assuming metadata is already JSON-compatible
+                        ]
+                    }
+                    return [:] // Return an empty dictionary if conversion fails
+                }
 
-  func backupCache() {
-    queue.sync(flags: .barrier) {
-      do {
-        let data = try JSONSerialization.data(withJSONObject: cachedLogs)
-        try data.write(to: LogsCache.fileURL())
-        self.cachedLogs = []
-      } catch {
-        if isDebug {
-          print("Error saving Logs cache.")
+                let data = try JSONSerialization.data(withJSONObject: jsonCompatibleLogs, options: .prettyPrinted)
+                try data.write(to: LogsCache.fileURL())
+                self.cachedLogs = []
+            } catch {
+                if isDebug {
+                    print("Error saving logs to cache: \(error.localizedDescription)")
+                    print("Error details: \(error)")
+                }
+            }
         }
-      }
     }
-  }
-
+    
+    
   private static func fileURL() throws -> URL {
     try FileManager.default.url(
       for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: false
@@ -58,7 +77,8 @@ final class LogsCache<T: Codable> {
       self.cachedLogs = logs
     } catch {
       if isDebug {
-        print("Error recovering logs from cache.")
+          print("Error recovering logs from cache: \(error.localizedDescription)")
+          print("Error details: \(error)")
       }
     }
   }
