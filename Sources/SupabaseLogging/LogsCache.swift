@@ -1,4 +1,5 @@
 import Foundation
+import Logging
 
 final class LogsCache<T: Codable> {
 
@@ -41,7 +42,7 @@ final class LogsCache<T: Codable> {
                             "level": logEntry.level,
                             "message": logEntry.message,
                             "loggedAt": ISO8601DateFormatter().string(from: logEntry.loggedAt), // Convert Date to String
-                            "metadata": logEntry.metadata // Assuming metadata is already JSON-compatible
+                            "metadata": makeJSONCompatible(logEntry.metadata ?? [:])
                         ]
                     }
                     return [:] // Return an empty dictionary if conversion fails
@@ -52,6 +53,9 @@ final class LogsCache<T: Codable> {
                     try data.write(to: LogsCache.fileURL())
                 } else {
                     print("Error saving logs to cache.  Logs are not json compatiable.  Discarding")
+                    let invalidElements = findInvalidElements(in: jsonCompatibleLogs)
+                    print("Invalid JSON elements found at paths:")
+                    invalidElements.forEach { print($0) }
                 }
                 
                 self.cachedLogs = []
@@ -65,6 +69,52 @@ final class LogsCache<T: Codable> {
         }
     }
     
+    func makeJSONCompatible(_ metadata: Logger.Metadata) -> [String: Any] {
+        var jsonCompatibleDict: [String: Any] = [:]
+        
+        for (key, value) in metadata {
+            jsonCompatibleDict[key] = unpackMetadataValue(value)
+        }
+        
+        return jsonCompatibleDict
+    }
+
+    func unpackMetadataValue(_ value: Logger.MetadataValue) -> Any {
+        switch value {
+        case .string(let str):
+            return str
+        case .stringConvertible(let convertible):
+            return convertible.description
+        case .array(let array):
+            return array.map { unpackMetadataValue($0) }
+        case .dictionary(let dict):
+            return makeJSONCompatible(dict)
+        }
+    }
+    
+    func findInvalidElements(in object: Any, path: String = "") -> [String] {
+        var invalidPaths = [String]()
+        
+        if JSONSerialization.isValidJSONObject(object) {
+            return invalidPaths
+        }
+        
+        if let array = object as? [Any] {
+            for (index, element) in array.enumerated() {
+                let newPath = "\(path)[\(index)]"
+                invalidPaths.append(contentsOf: findInvalidElements(in: element, path: newPath))
+            }
+        } else if let dictionary = object as? [String: Any] {
+            for (key, value) in dictionary {
+                let newPath = path.isEmpty ? key : "\(path).\(key)"
+                invalidPaths.append(contentsOf: findInvalidElements(in: value, path: newPath))
+            }
+        } else if !(object is String || object is NSNumber || object is NSNull) {
+            invalidPaths.append(path)
+        }
+        
+        return invalidPaths
+    }
     
   private static func fileURL() throws -> URL {
     try FileManager.default.url(
