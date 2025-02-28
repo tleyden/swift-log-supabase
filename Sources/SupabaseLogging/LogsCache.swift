@@ -46,10 +46,16 @@ final class LogsCache<T: Codable> {
                     }
                     return [:] // Return an empty dictionary if conversion fails
                 }
-
-                let data = try JSONSerialization.data(withJSONObject: jsonCompatibleLogs, options: .prettyPrinted)
-                try data.write(to: LogsCache.fileURL())
+                
+                if JSONSerialization.isValidJSONObject(jsonCompatibleLogs) {
+                    let data = try JSONSerialization.data(withJSONObject: jsonCompatibleLogs, options: .prettyPrinted)
+                    try data.write(to: LogsCache.fileURL())
+                } else {
+                    print("Error saving logs to cache.  Logs are not json compatiable.  Discarding")
+                }
+                
                 self.cachedLogs = []
+
             } catch {
                 if isDebug {
                     print("Error saving logs to cache: \(error.localizedDescription)")
